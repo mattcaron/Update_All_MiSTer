@@ -73,7 +73,7 @@ set_default_options
 UPDATE_ALL_VERSION="1.3"
 UPDATE_ALL_PC_UPDATER="${UPDATE_ALL_PC_UPDATER:-false}"
 UPDATE_ALL_OS="${UPDATE_ALL_OS:-MiSTer_Linux}"
-CURL_RETRY="--connect-timeout 15 --max-time 180 --retry 3 --retry-delay 5"
+UPDATE_ALL_LAUNCHER_MD5="ac10fbada40e3e5f133bc0eee0dd53d5"
 AUTO_UPDATE_LAUNCHER="${AUTO_UPDATE_LAUNCHER:-true}"
 ORIGINAL_SCRIPT_PATH="${0}"
 ORIGINAL_INI_PATH="${ORIGINAL_SCRIPT_PATH%.*}.ini"
@@ -83,9 +83,17 @@ SETTINGS_ON_FILENAME="settings-on"
 WORK_OLD_PATH="/media/fat/Scripts/.update_all"
 WORK_NEW_PATH="/media/fat/Scripts/.cache/update_all"
 WORK_PATH=
+MISTER_MAIN_UPDATER_WORK_FOLDER="/media/fat/Scripts/.mister_updater"
+JOTEGO_UPDATER_WORK_FOLDER="/media/fat/Scripts/.mister_updater_jt"
+UNOFFICIAL_UPDATER_WORK_FOLDER="/media/fat/Scripts/.mister_updater_unofficials"
+ARCADE_ORGANIZER_INSTALLED_NAMES_TXT="/media/fat/Scripts/.cache/arcade-organizer/installed_names.txt"
+ARCADE_ORGANIZER_FOLDER_OPTION_1="/media/fat/_Arcade/_Organized"
+ARCADE_ORGANIZER_FOLDER_OPTION_2="/media/fat/_Arcade"
+MISTER_INI_PATH="/media/fat/MiSTer.ini"
+NAMES_TXT_PATH="/media/fat/names.txt"
 GLOG_TEMP="/tmp/tmp.global.${LOG_FILENAME}"
 GLOG_PATH=".update_all.log"
-LAST_MRA_PROCESSING_PATH=
+UPDATE_ALL_URL="https://raw.githubusercontent.com/theypsilon/Update_All_MiSTer/master/update_all.sh"
 MISTER_DEVEL_UPDATER_URL="https://raw.githubusercontent.com/MiSTer-devel/Updater_script_MiSTer/master/mister_updater.sh"
 MISTER_DB9_UPDATER_URL="https://raw.githubusercontent.com/theypsilon/Updater_script_MiSTer_DB9/master/mister_updater.sh"
 JOTEGO_UPDATER_URL="https://raw.githubusercontent.com/jotego/Updater_script_MiSTer/master/mister_updater.sh"
@@ -96,9 +104,6 @@ BIOS_GETTER_URL="https://raw.githubusercontent.com/MAME-GETTER/MiSTer_BIOS_SCRIP
 MAME_GETTER_URL="https://raw.githubusercontent.com/MAME-GETTER/MiSTer_MAME_SCRIPTS/master/mame-merged-set-getter.sh"
 HBMAME_GETTER_URL="https://raw.githubusercontent.com/MAME-GETTER/MiSTer_MAME_SCRIPTS/master/hbmame-merged-set-getter.sh"
 ARCADE_ORGANIZER_URL="https://raw.githubusercontent.com/MAME-GETTER/_arcade-organizer/master/_arcade-organizer.sh"
-MISTER_MAIN_UPDATER_WORK_FOLDER="/media/fat/Scripts/.mister_updater"
-JOTEGO_UPDATER_WORK_FOLDER="/media/fat/Scripts/.mister_updater_jt"
-UNOFFICIAL_UPDATER_WORK_FOLDER="/media/fat/Scripts/.mister_updater_unofficials"
 INI_REFERENCES=( \
     "EXPORTED_INI_PATH" \
     "MAIN_UPDATER_INI" \
@@ -189,18 +194,44 @@ load_single_var_from_ini() {
     echo "${VALUE}"
 }
 
+fetch_or_exit() {
+    local SCRIPT_PATH="${1}"
+    local SCRIPT_URL="${2}"
+
+    if curl ${CURL_RETRY} --silent --show-error ${SSL_SECURITY_OPTION} --fail --location -o ${SCRIPT_PATH} ${SCRIPT_URL} ; then return ; fi
+
+    echo "There was some network problem."
+    echo
+    echo "Following file couldn't be downloaded:"
+    echo ${@: -1}
+    echo
+    echo "Please try again later."
+    echo
+    exit 1
+}
+
+fetch_or_continue() {
+    local SCRIPT_PATH="${1}"
+    local SCRIPT_URL="${2}"
+
+    curl ${CURL_RETRY} --silent --show-error ${SSL_SECURITY_OPTION} --fail --location -o ${SCRIPT_PATH} ${SCRIPT_URL}
+}
+
+make_folder() {
+    local FOLDER_PATH="${1}"
+    mkdir -p "${FOLDER_PATH}"
+}
+
 initialize() {
-    if [[ "${UPDATE_ALL_PC_UPDATER}" != "true" ]] && [[ "${AUTO_UPDATE_LAUNCHER}" == "true" ]] ; then
-        local MAYBE_NEW_LAUNCHER="/tmp/ua_maybe_new_launcher.sh"
-        rm "${MAYBE_NEW_LAUNCHER}" 2> /dev/null || true
-        curl ${CURL_RETRY} --silent --show-error ${SSL_SECURITY_OPTION} --fail --location -o "${MAYBE_NEW_LAUNCHER}" "https://raw.githubusercontent.com/theypsilon/Update_All_MiSTer/master/update_all.sh" > /dev/null 2>&1 || true
-        if [ -f "${MAYBE_NEW_LAUNCHER}" ] && [ -d "${BASE_PATH}/Scripts/" ]; then
-            local OLD_SCRIPT_PATH="${EXPORTED_INI_PATH%.*}.sh"
-            if [ -f "${OLD_SCRIPT_PATH}" ] && \
-                ! diff "${MAYBE_NEW_LAUNCHER}" "${OLD_SCRIPT_PATH}" > /dev/null 2>&1 && \
-                [[ "$(md5sum ${MAYBE_NEW_LAUNCHER} | awk '{print $1}')" == "1422ef7e811c771dcecb7d1f97a49464" ]]
-            then
-                cp "${MAYBE_NEW_LAUNCHER}"  "${OLD_SCRIPT_PATH}" || true
+    if [[ "${UPDATE_ALL_PC_UPDATER}" != "true" ]] && [[ "${AUTO_UPDATE_LAUNCHER}" == "true" ]] && [ -d "${BASE_PATH}/Scripts/" ] ; then
+        local OLD_SCRIPT_PATH="${EXPORTED_INI_PATH%.*}.sh"
+        if [ ! -f "${OLD_SCRIPT_PATH}" ] || [[ "$(md5sum ${OLD_SCRIPT_PATH} | awk '{print $1}')" != "${UPDATE_ALL_LAUNCHER_MD5}" ]] ; then
+            local MAYBE_NEW_LAUNCHER="/tmp/ua_maybe_new_launcher.sh"
+            rm "${MAYBE_NEW_LAUNCHER}" 2> /dev/null || true
+            fetch_or_continue "${MAYBE_NEW_LAUNCHER}" "${UPDATE_ALL_URL}" > /dev/null 2>&1 || true
+            if [ -f "${MAYBE_NEW_LAUNCHER}" ] && [[ "$(md5sum ${MAYBE_NEW_LAUNCHER} | awk '{print $1}')" == "${UPDATE_ALL_LAUNCHER_MD5}" ]] ; then
+                rm "${OLD_SCRIPT_PATH}" 2> /dev/null || true
+                cp "${MAYBE_NEW_LAUNCHER}" "${OLD_SCRIPT_PATH}" || true
             fi
         fi
     fi
@@ -219,7 +250,7 @@ initialize() {
     if [ ! -d "${WORK_PATH}" ] ; then
         WORK_PATH="${WORK_NEW_PATH}"
         if [ ! -d "${WORK_PATH}" ] ; then
-            mkdir -p "${WORK_PATH}"
+            make_folder "${WORK_PATH}"
             MAME_GETTER_FORCE_FULL_RESYNC="true"
             HBMAME_GETTER_FORCE_FULL_RESYNC="true"
             ARCADE_ORGANIZER_FORCE_FULL_RESYNC="true"
@@ -284,13 +315,14 @@ post_load_update_all_ini() {
     done
 }
 
-MAIN_UPDATER_URL="${MISTER_DEVEL_UPDATER_URL}"
+SELECT_MAIN_UPDATER_RET=
 select_main_updater() {
     case "${ENCC_FORKS}" in
         true)
-            MAIN_UPDATER_URL="${MISTER_DB9_UPDATER_URL}"
+            SELECT_MAIN_UPDATER_RET="${MISTER_DB9_UPDATER_URL}"
             ;;
         *)
+            SELECT_MAIN_UPDATER_RET="${MISTER_DEVEL_UPDATER_URL}"
             ;;
     esac
 }
@@ -305,20 +337,7 @@ draw_separator() {
     sleep 1
 }
 
-fetch_or_exit() {
-    if curl ${@} ; then return ; fi
-
-    echo "There was some network problem."
-    echo
-    echo "Following file couldn't be downloaded:"
-    echo ${@: -1}
-    echo
-    echo "Please try again later."
-    echo
-    exit 1
-}
-
-UPDATER_RET=0
+RUN_UPDATER_SCRIPT_RET=0
 run_updater_script() {
     local SCRIPT_URL="${1}"
     local SCRIPT_INI="${2}"
@@ -333,7 +352,7 @@ run_updater_script() {
     local SCRIPT_PATH="/tmp/ua_current_updater.sh"
     rm ${SCRIPT_PATH} 2> /dev/null || true
 
-    fetch_or_exit ${CURL_RETRY} --silent --show-error ${SSL_SECURITY_OPTION} --fail --location -o ${SCRIPT_PATH} ${SCRIPT_URL}
+    fetch_or_exit "${SCRIPT_PATH}" "${SCRIPT_URL}"
 
     sed -i "s%INI_PATH=%INI_PATH=\"${SCRIPT_INI}\" #%g" ${SCRIPT_PATH}
     sed -i 's/${AUTOREBOOT}/false/g' ${SCRIPT_PATH}
@@ -349,16 +368,16 @@ run_updater_script() {
         sed -i 's/if \[\[ "$MAX_VERSION" > "$MAX_LOCAL_VERSION" \]\]/if \[\[ "$MAX_VERSION" > "$MAX_LOCAL_VERSION" \]\] || ! \[\[ "${CORE_URL}" =~ SD-Installer \]\]/g' ${SCRIPT_PATH}
         pushd "${MISTER_MAIN_UPDATER_WORK_FOLDER}" > /dev/null 2>&1
         rm -rf db9 || true
-		rm -rf *.last_successful_run || true
-		rm -rf *.log || true
-		rm -rf menu_* || true
-		rm -rf MiSTer_* || true
+        rm -rf *.last_successful_run || true
+        rm -rf *.log || true
+        rm -rf menu_* || true
+        rm -rf MiSTer_* || true
         popd > /dev/null 2>&1
     fi
 
     set +e
     cat ${SCRIPT_PATH} | bash -
-    UPDATER_RET=$?
+    RUN_UPDATER_SCRIPT_RET=$?
     set -e
 
     sleep ${WAIT_TIME_FOR_READING}
@@ -378,7 +397,7 @@ run_mame_getter_script() {
     echo "Downloading the most recent $(basename ${SCRIPT_FILENAME}) script."
     echo " "
 
-    fetch_or_exit ${CURL_RETRY} --silent --show-error ${SSL_SECURITY_OPTION} --fail --location -o ${SCRIPT_PATH} ${SCRIPT_URL}
+    fetch_or_exit "${SCRIPT_PATH}" "${SCRIPT_URL}"
     echo
 
     if [[ "${UPDATE_ALL_PC_UPDATER}" == "true" ]] ; then
@@ -419,10 +438,7 @@ run_quiet_mame_getter_script() {
     local SCRIPT_PATH="/tmp/ua_temp_script"
     rm "${SCRIPT_PATH}" 2> /dev/null || true
 
-    curl ${CURL_RETRY} --silent --show-error ${SSL_SECURITY_OPTION} \
-        --fail --location \
-        -o ${SCRIPT_PATH} \
-        ${SCRIPT_URL} > /dev/null 2>&1 || return
+    fetch_or_continue "${SCRIPT_PATH}" "${SCRIPT_URL}" > /dev/null 2>&1 || return
 
     if [[ "${UPDATE_ALL_PC_UPDATER}" == "true" ]] ; then
         sed -i 's/\/media\/fat/\.\./g ' ${SCRIPT_PATH}
@@ -486,12 +502,12 @@ install_scripts() {
     draw_separator
 
     echo "Installing update_all.sh in MiSTer /Scripts directory."
-    mkdir -p ../Scripts
+    make_folder "../Scripts"
 
     rm /tmp/ua_install.update_all.sh 2> /dev/null || true
 
     set +e
-    curl ${CURL_RETRY} --silent --show-error ${SSL_SECURITY_OPTION} --fail --location -o /tmp/ua_install.update_all.sh https://raw.githubusercontent.com/theypsilon/Update_All_MiSTer/master/update_all.sh
+    fetch_or_continue "/tmp/ua_install.update_all.sh" "${UPDATE_ALL_URL}"
     local RET_CURL=$?
     set -e
 
@@ -528,7 +544,7 @@ install_scripts() {
     rm /tmp/ua_install.arcade_organizer.sh 2> /dev/null || true
 
     set +e
-    curl ${CURL_RETRY} --silent --show-error ${SSL_SECURITY_OPTION} --fail --location -o /tmp/ua_install.arcade_organizer.sh "${ARCADE_ORGANIZER_URL}"
+    fetch_or_continue "/tmp/ua_install.arcade_organizer.sh" "${ARCADE_ORGANIZER_URL}"
     local RET_CURL=$?
     set -e
 
@@ -651,8 +667,8 @@ run_update_all() {
 
     if [[ "${MAIN_UPDATER}" == "true" ]] ; then
         select_main_updater
-        run_updater_script ${MAIN_UPDATER_URL} ${MAIN_UPDATER_INI}
-        if [ $UPDATER_RET -ne 0 ]; then
+        run_updater_script ${SELECT_MAIN_UPDATER_RET} ${MAIN_UPDATER_INI}
+        if [ $RUN_UPDATER_SCRIPT_RET -ne 0 ]; then
             FAILING_UPDATERS+=("${MISTER_MAIN_UPDATER_WORK_FOLDER}/${LOG_FILENAME}")
         fi
         sleep 1
@@ -663,21 +679,21 @@ run_update_all() {
 
     if [[ "${JOTEGO_UPDATER}" == "true" ]] ; then
         run_updater_script "${JOTEGO_UPDATER_URL}" "${JOTEGO_UPDATER_INI}"
-        if [ $UPDATER_RET -ne 0 ]; then
+        if [ $RUN_UPDATER_SCRIPT_RET -ne 0 ]; then
             FAILING_UPDATERS+=("${JOTEGO_UPDATER_WORK_FOLDER}/${LOG_FILENAME}")
         fi
     fi
 
     if [[ "${UNOFFICIAL_UPDATER}" == "true" ]] ; then
         run_updater_script "${UNOFFICIAL_UPDATER_URL}" "${UNOFFICIAL_UPDATER_INI}"
-        if [ $UPDATER_RET -ne 0 ]; then
+        if [ $RUN_UPDATER_SCRIPT_RET -ne 0 ]; then
             FAILING_UPDATERS+=("${UNOFFICIAL_UPDATER_WORK_FOLDER}/${LOG_FILENAME}")
         fi
     fi
 
     if [[ "${LLAPI_UPDATER}" == "true" ]] ; then
         run_updater_script "${LLAPI_UPDATER_URL}" "${LLAPI_UPDATER_INI}"
-        if [ $UPDATER_RET -ne 0 ]; then
+        if [ $RUN_UPDATER_SCRIPT_RET -ne 0 ]; then
             FAILING_UPDATERS+=("LLAPI")
         fi
     fi
@@ -698,7 +714,7 @@ run_update_all() {
 
     if [[ "${NAMES_TXT_UPDATER}" == "true" ]] ; then
         run_updater_script "${NAMES_TXT_UPDATER_URL}" "${NAMES_TXT_UPDATER_INI}"
-        if [ $UPDATER_RET -ne 0 ]; then
+        if [ $RUN_UPDATER_SCRIPT_RET -ne 0 ]; then
             FAILING_UPDATERS+=("Names.txt_Updater")
         fi
     fi
@@ -747,11 +763,6 @@ run_update_all() {
     if [[ "${UPDATE_ALL_OS}" != "WINDOWS" ]] ; then
         echo "Full log for more details: ${GLOG_PATH}"
         echo
-    fi
-
-    if [[ "${EXIT_CODE}" == "0" ]] && [[ "${LAST_MRA_PROCESSING_PATH}" != "" ]]; then
-        echo "${UPDATE_ALL_VERSION}" > "${LAST_MRA_PROCESSING_PATH}"
-        echo "${END_TIME}" >> "${LAST_MRA_PROCESSING_PATH}"
     fi
 
     if [[ "${UPDATE_ALL_PC_UPDATER}" != "true" ]] && { \
@@ -1623,7 +1634,7 @@ https://github.com/ThreepwoodLeBrush/Names_MiSTer" 18 75 25 \
                 "${ACTIVATE}")
                     settings_change_var "NAMES_TXT_UPDATER" "$(settings_domain_ini_file ${EXPORTED_INI_PATH})"
                     local NEW_NAMES_TXT_UPDATER=$(load_single_var_from_ini "NAMES_TXT_UPDATER" "$(settings_domain_ini_file ${EXPORTED_INI_PATH})")
-                    if [[ "${NEW_NAMES_TXT_UPDATER}" == "true" ]] && [ ! -f "/media/fat/Scripts/.cache/arcade-organizer/installed_names.txt" ] && [ -f "/media/fat/names.txt" ] ; then
+                    if [[ "${NEW_NAMES_TXT_UPDATER}" == "true" ]] && [ ! -f "${ARCADE_ORGANIZER_INSTALLED_NAMES_TXT}" ] && [ -f "${NAMES_TXT_PATH}" ] ; then
                         set +e
                         DIALOGRC="${SETTINGS_TMP_BLACK_DIALOGRC}" dialog --keep-window --msgbox "WARNING! Your current names.txt file will be overwritten after updating" 5 76
                         set -e
@@ -1633,7 +1644,7 @@ https://github.com/ThreepwoodLeBrush/Names_MiSTer" 18 75 25 \
                 "3 Region") settings_change_var "NAMES_REGION" "$(settings_domain_ini_file ${NAMES_TXT_UPDATER_INI})" ;;
                 "4 Char Code") settings_change_var "NAMES_CHAR_CODE" "$(settings_domain_ini_file ${NAMES_TXT_UPDATER_INI})"
                     local NEW_NAMES_CHAR_CODE=$(load_single_var_from_ini "NAMES_CHAR_CODE" "$(settings_domain_ini_file ${NAMES_TXT_UPDATER_INI})")
-                    if [[ "${NEW_NAMES_CHAR_CODE}" == "CHAR28" ]] && ! grep -q "rbf_hide_datecode=1" /media/fat/MiSTer.ini 2> /dev/null ; then
+                    if [[ "${NEW_NAMES_CHAR_CODE}" == "CHAR28" ]] && ! grep -q "rbf_hide_datecode=1" "${MISTER_INI_PATH}" 2> /dev/null ; then
                         set +e
                         dialog --keep-window --msgbox "It's recommended to set rbf_hide_datecode=1 on MiSTer.ini when using CHAR28" 5 80
                         set -e
@@ -1648,7 +1659,7 @@ https://github.com/ThreepwoodLeBrush/Names_MiSTer" 18 75 25 \
                     fi
                     ;;
                 "6 Remove \"names.txt\"")
-                    if [ -f /media/fat/names.txt ] ; then
+                    if [ -f "${NAMES_TXT_PATH}" ] ; then
                         set +e
                         dialog --keep-window --title "Are you sure?" --defaultno \
                             --yesno "If you have done changes to names.txt, they will be lost" \
@@ -1656,7 +1667,7 @@ https://github.com/ThreepwoodLeBrush/Names_MiSTer" 18 75 25 \
                         local SURE_RET=$?
                         set -e
                         if [[ "${SURE_RET}" == "0" ]] ; then
-                            rm /media/fat/names.txt
+                            rm "${NAMES_TXT_PATH}"
                             set +e
                             dialog --keep-window --msgbox "names.txt Removed" 5 22
                             set -e
@@ -1688,7 +1699,7 @@ settings_menu_arcade_organizer() {
     SETTINGS_OPTIONS_ARCADE_ORGANIZER_INI=("update_arcade-organizer.ini" "$(settings_normalize_ini_file ${EXPORTED_INI_PATH})")
     settings_try_add_ini_option 'SETTINGS_OPTIONS_ARCADE_ORGANIZER_INI' "${ARCADE_ORGANIZER_INI}"
     SETTINGS_OPTIONS_SKIPALTS=("true" "false")
-    SETTINGS_OPTIONS_ORGDIR=("/media/fat/_Arcade/_Organized" "/media/fat/_Arcade")
+    SETTINGS_OPTIONS_ORGDIR=("${ARCADE_ORGANIZER_FOLDER_OPTION_1}" "${ARCADE_ORGANIZER_FOLDER_OPTION_2}")
 
     while true ; do
         (

@@ -23,7 +23,7 @@ set -euo pipefail
 
 
 # ========= OPTIONS ==================
-CURL_RETRY="--connect-timeout 15 --max-time 120 --retry 3 --retry-delay 5 --silent --show-error"
+CURL_RETRY="--connect-timeout 15 --max-time 600 --retry 3 --retry-delay 5"
 ALLOW_INSECURE_SSL="true"
 
 # ========= CODE STARTS HERE =========
@@ -46,7 +46,7 @@ fi
 set +e
 
 SSL_SECURITY_OPTION=""
-curl ${CURL_RETRY} "https://github.com" > /dev/null 2>&1
+curl ${CURL_RETRY} --silent --show-error "https://github.com" > /dev/null 2>&1
 case $? in
     0)
         ;;
@@ -81,7 +81,7 @@ if [[ "${DEBUG_UPDATER:-false}" != "true" ]] || [ ! -f dont_download.sh ] ; then
     echo ""
 
     curl \
-        ${CURL_RETRY} \
+        ${CURL_RETRY} --silent --show-error \
         ${SSL_SECURITY_OPTION} \
         --fail \
         --location \
@@ -100,6 +100,6 @@ export EXPORTED_INI_PATH="${INI_PATH}"
 
 bash "${SCRIPT_PATH}" || echo -e "Script ${ORIGINAL_SCRIPT_PATH} failed!\n"
 
-rm ${SCRIPT_PATH}
+rm ${SCRIPT_PATH} 2> /dev/null || true
 
 exit 0
